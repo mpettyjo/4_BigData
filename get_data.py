@@ -25,6 +25,10 @@ import os
 import re
 from os.path import exists
 
+#global variables
+CONF, conf = 'Conformers', 'conformers'
+
+
 def get_harm_info(file):
     ''' Get harmonic frequencies from Gaussian output file.
     
@@ -190,12 +194,19 @@ def int_get_gibbs_energy(location,loc_num_atoms,mol_id,CONF,conf,energy_df):
                         Directory name with form "{NUM}_Atoms/", where NUM is the
                         number of atoms.
         mol_id: string
+                Molecule id as given in biosignature data set file.
         CONF: string
+                Global variable defined above.
         conf: string
+                Global variable defined above.
         energy_df: pandas dataframe
+                    Empty dataframe containing the column names 'CONF#','G','RawG'
 
         Returns
         -------
+        energy_df: pandas dataframe
+                    Dataframe containing the Gibbs free energies of all of the conformers
+                    for `mol_id.`
     '''
     file = location+loc_num_atoms+'3_CREST_CENSO_Outputs/BWeights_GeomFiles_'+CONF+'/'+mol_id+'_bweight_'+conf+'.dat'
     print(file)
@@ -214,9 +225,22 @@ def int_get_gibbs_energy(location,loc_num_atoms,mol_id,CONF,conf,energy_df):
     return energy_df
 
 def get_censo_gibbs_energy(location,loc_num_atoms,mol_id):
-    '''
+    ''' Create dataframe with Gibbs free energy and Boltzmann weights
+        for a given molecule.
+    
+        Implements int_get_gibbs_energy above to create a dataframe
+        containing the conformer ids, Gibbs free energies, and
+        Boltzmann Weights for the molecule given by `mol_id.`
+
     Parameters
     ----------
+    location: string
+                Directory pathway to the project folder, i.e., "4_BigData"
+    loc_num_atoms: string
+                    Directory name with form "{NUM}_Atoms/", where NUM is the
+                    number of atoms.
+    mol_id: string
+            Molecule id as given in biosignature data set file.
 
     Returns
     -------
@@ -235,3 +259,287 @@ def get_censo_gibbs_energy(location,loc_num_atoms,mol_id):
     get_boltzmannweights_at_T(final_df)
     
     return final_df
+## end of two functions ##
+
+def get_dipole_moments(file):
+    ''' Get dipole moments from Gaussian output file.
+
+    Parameters
+    ----------
+    file: string
+              Pathway to a Gaussian vibrational frequency output file.
+
+    Returns
+    -------
+    [abc_dipole, total_dipole, a_dipole, b_dipole, c_dipole]: [float, float, float, float, float]
+                List of dipole moments of molecule in Debye.
+    '''
+    dipole_info = []
+    rotmatrix_info = []
+    mat_count = 0
+    with open(file, 'r') as inp:
+        for line in inp:
+            line = line.strip()
+
+            if line.startswith('Dipole moment (Debye):'):
+                #print(next(inp).split())
+                dipole_info.append(next(inp).split())
+            if line.startswith('Rotation matrix to Principal Axis frame:'):
+                mat_count+=1
+                if mat_count==2:
+                    rotmatrix_info.append(next(inp).split())
+                    rotmatrix_info.append(next(inp).split())
+                    rotmatrix_info.append(next(inp).split())
+                    rotmatrix_info.append(next(inp).split())
+        
+    row = dipole_info[-1]
+    xyz_dipole = [float(row[0]),float(row[1]),float(row[2])]
+    rotmatrix_info.remove(['1', '2', '3'])
+
+    rot_matrix = []
+    for row in rotmatrix_info:
+        rot_matrix.append([float(row[1].replace('D','E')),float(row[2].replace('D','E')),float(row[3].replace('D','E'))])
+    abc_dipole = np.matmul(rot_matrix,xyz_dipole)
+    
+    return np.append(abc_dipole,[np.sqrt(abc_dipole[0]**2+abc_dipole[1]**2+abc_dipole[2]**2),abc_dipole[0]*abc_dipole[1]*abc_dipole[2]])
+
+
+## Functions for getting rotational data ##
+def get_rotational_constants(file):
+    ''' Get A, B, C constants from Gaussian output file.
+    
+    Parameters
+    ----------
+    file: string
+              Pathway to a Gaussian vibrational frequency output file.
+    
+    Returns
+    -------
+    [A, B, C]: [float, float, float]
+                List containing A, B, and C rotational constants in cm-1.
+    '''
+    rot_count = 0
+    with open(file, 'r') as inp:
+        for line in inp:
+            line = line.strip()
+            if line.startswith('Rotational constants (MHZ):'):
+                rot_count+=1
+                if rot_count==2:
+                    rot_info=next(inp).split()
+    if (rot_info[0] == '***************'):
+        rot_info[0] = 0
+    elif (rot_info[1] == '***************'):
+        rot_info[1] = 0
+    elif (rot_info[2] == '***************'):
+        rot_info[2] = 0
+        
+    return [float(rot_info[0])/29979.2458,float(rot_info[1])/29979.2458,float(rot_info[2])/29979.2458]
+
+def grab_constant(inp,quartic_constants):
+    '''Get quartic rotational constant from list and add
+        them to the input list.
+    
+        Parameters
+        ----------
+        inp: opened file
+                Gaussian output file.
+        quartic_constants: List
+                            Empty list to be populated by quaritic constants.
+
+        '''
+    rot_info = next(inp).split()
+    quartic_constants.append(float(rot_info[3])/29979.2458)
+    return
+
+def get_quartic_rotational_constants(file):  #NOT DONE
+    ''' Get quartic constants from a Gaussian input file.
+
+    Parameters
+    ----------
+    file: string
+              Pathway to a Gaussian vibrational frequency output file.
+
+    Returns
+    -------
+    [Delta_N, ]: [float, float, float, float, float]
+                List containing Delta_N, ... quartic rotational constants 
+                in cm-1.
+    '''
+    quartic_constants = []
+    with open(file, 'r') as inp:
+        for line in inp:
+            line = line.strip()
+            if line.startswith('(Asymmetrically reduced)          (Symmetrically reduced)'):
+                for n in range(0,5,1):
+                    grab_constant(inp,quartic_constants)
+    print(quartic_constants)
+    return 
+
+def have_hyperfine(file):
+    ''' Check if molecule has hyperfine data in Gaussian vibrational 
+        calculation output file.
+
+    Parameters
+    ----------
+    file: string
+              Pathway to a Gaussian vibrational frequency output file.
+
+    Returns
+    -------
+    hyperfine: string
+                String "Yes" or "No" indicating if hyperfine data exists.
+    '''
+    with open(file, 'r') as inp:
+        for line in inp:
+            line = line.strip()
+            if line.startswith('Atoms with significant hyperfine tensors:'):
+                print(line.split())
+                if len(line.split()) == 5:
+                    hyperfine = 'No'
+                    print(hyperfine)
+                elif len(line.split()) > 5:
+                    hyperfine = 'Yes'
+                    print(hyperfine)
+    return hyperfine
+
+## end of rotational data functions ##
+
+def get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf):
+    ''' Get rotamer degeneracy from CREST output file for molecule.
+
+    Parameters
+    ----------
+    location: string
+                Directory pathway to the project folder, i.e., "4_BigData"
+    loc_num_atoms: string
+                    Directory name with form "{NUM}_Atoms/", where NUM is the
+                    number of atoms.
+    mol_id: string
+            Molecule id as given in biosignature data set file.
+    conf: string
+            Global variable defined above.
+
+    Returns
+    -------
+    rota_degen: int
+                Rotamer degeneracy of a molecule.
+    '''
+    file_crest = location+loc_num_atoms+'3_CREST_CENSO_Outputs/CREST_OutputFiles/'+mol_id+'_crest.out'
+    degen_info_list = []
+    with open(file_crest, 'r') as inp:
+        for line in inp:
+            line = line.strip()
+            if line.startswith('Erel/kcal'):
+                while not all(i in ['T', '/K', ':', '298.15'] for i in line):
+                    line=next(inp).split()
+                    degen_info_list.append(line)     
+    inp.close()
+    
+    conf_num = conf.split('CONF')[-1]
+    rota_degen=1
+    for line in degen_info_list:
+        if len(line)==8:
+            if conf_num==line[-3]:
+                rota_degen = line[-2]
+    print(mol_id,conf_num,rota_degen)            
+    return int(rota_degen)
+
+# -------------------------------------------
+# Parsing Vibrational Data from Output Files
+# -------------------------------------------
+
+## these two functions work together ##
+def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
+    file_conf_list=unique_conf_list(location,loc_num_atoms)
+
+    # Opens each individual output file as reference for the SMILES codes.
+    for mol in file_conf_list:
+        mol_id = mol[0]
+        mol_conf = mol[1]
+        
+
+        # Gets the SMILES code and the experimental frequencies from the benchmark dataset.
+        smiles_code = biosig_data.query("Formula_ID == @mol_id")['SMILES'].iloc[0] 
+        mol_tot_atoms = int(biosig_data.loc[biosig_data['Formula_ID'] == mol_id]['Tot_atoms'].values[0])
+
+        # Gets dataframe with gibbs energy for each Conf
+        energy_df = get_censo_gibbs_energy(location,loc_num_atoms,mol_id)
+
+        inter_row_info_list = []
+        for conf in mol_conf:
+            
+            # get Gibbs energies
+            conf_energy = energy_df.loc[energy_df['CONF#'] == conf]['G'].values[0]
+            conf_bw_10K = energy_df.loc[energy_df['CONF#'] == conf]['BW Percent at 10 K'].values[0]
+            conf_bw_50K = energy_df.loc[energy_df['CONF#'] == conf]['BW Percent at 50 K'].values[0]
+            conf_bw_100K = energy_df.loc[energy_df['CONF#'] == conf]['BW Percent at 100 K'].values[0]
+            conf_bw_29815K = energy_df.loc[energy_df['CONF#'] == conf]['BW Percent at 298.15 K'].values[0]
+
+            conf_type = re.split('(\d+)',conf)[0]
+
+            if conf_type == 'CONF':
+                file = location+loc_num_atoms+'4_VibrationalCalcs/OutputFiles/'+mol_id+'_'+conf+'_harmonic_conformers.log'
+
+            # get harmonic frequencies from 'file' for specific Conf
+            harm_info = get_harm_info(file)
+
+
+            conf_raw_freqs = []
+            conf_scaled_freqs = []
+            conf_ints = []
+
+            for line_data in harm_info:
+                # From the raw vibrational data obatins the frequencies and modes.
+                if line_data[0] == 'Frequencies':
+                    for index,value in enumerate(line_data):
+                        if index > 1:
+                            #counter += 1
+                            conf_raw_freqs.append(float(value))
+                            #hmodes.append(str(counter))
+
+                # From the raw vibrational data obtained the intensities.
+                elif line_data[0] == 'IR':
+                    for index,value in enumerate(line_data):
+                        if index > 2:
+                            conf_ints.append(float(value))
+
+
+            # test for imaginary frequencies.
+            neg_freqs = 0
+            for freq in conf_raw_freqs:
+                if float(freq) < 0:
+                    neg_freqs = neg_freqs + 1
+
+            scale_factors = [0.995395864,0.979158827,0.963816253] #[low,mid,high] #B971/Def2TZVPD
+            # If no imaginary frequencies, prints data into a dataframe (later csv file).
+            if neg_freqs == 0:
+                conf_scaled_freqs = []
+                for freq in conf_raw_freqs:
+                    if freq < 1000:
+                        freq_scaled = freq*scale_factors[0]
+                    elif (freq >= 1000) and (freq <= 2000):
+                        freq_scaled = freq*scale_factors[1]
+                    elif freq > 2000:
+                        freq_scaled = freq*scale_factors[2]
+                    conf_scaled_freqs.append(freq_scaled)
+
+                # Get dipole moments
+                dipole_info = get_dipole_moments(file)
+                
+                # Get Rotational Constants in cm-1
+                #print(file)
+                rot_info = get_rotational_constants(file)
+                
+                # Get rotamer degeneracy
+                rota_degen = get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf)
+
+                # Make each row of data
+                row_info = list([mol_id,smiles_code,mol_tot_atoms,conf,rota_degen,conf_energy,conf_bw_10K,conf_bw_50K,conf_bw_100K,conf_bw_29815K,conf_raw_freqs,conf_scaled_freqs,conf_ints,dipole_info[0],dipole_info[1],dipole_info[2],dipole_info[3],dipole_info[4],rot_info[0],rot_info[1],rot_info[2]])
+                df.loc[len(df)] = row_info
+
+            # If imaginary frequency found, prints the name of the molecule.
+            
+            else:
+                print(file.split('/')[-1]+' has imaginary frequencies.')
+    return df
+    
