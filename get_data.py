@@ -450,14 +450,26 @@ def get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf):
 
 ## these two functions work together ##
 def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
-    '''
-    Parameters
-    ----------
-    location: string
-                    Directory pathway to the project folder, i.e., "4_BigData"
-    loc_num_atoms: string
-                    Directory name with form "{NUM}_Atoms/", where NUM is the
-                    number of atoms.
+    ''' Get all data from Gaussian output files for a given number of atoms
+        folder and store in a dataframe. 
+
+        Parameters
+        ----------
+        location: string
+                        Directory pathway to the project folder, i.e., "4_BigData"
+        loc_num_atoms: string
+                        Directory name with form "{NUM}_Atoms/", where NUM is the
+                        number of atoms.
+        biosig_data: pandas dataframe
+                    Dataframe containing all molecules in Seager et al.'s data set.
+        df: pandas dataframe
+            Dataframe with columns according to data to be added.
+        
+        Returns
+        -------
+        df: pandas dataframe
+            Dataframe containing data extracted from Gaussian vibrational frequency 
+            calculation output files.
     '''
     file_conf_list=unique_conf_list(location,loc_num_atoms)
 
@@ -552,3 +564,27 @@ def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
                 print(file.split('/')[-1]+' has imaginary frequencies.')
     return df
     
+def parse_vib_data(location,biosig_data,df):
+    ''' Gets data from Gaussian output files for all atoms folders using
+        in_parse_vib_data and populates pandas dataframe `df`.
+
+        Parameters
+        ----------
+        location: string
+                        Directory pathway to the project folder, i.e., "4_BigData"
+        loc_num_atoms: string
+                        Directory name with form "{NUM}_Atoms/", where NUM is the
+                        number of atoms.
+        biosig_data: pandas dataframe
+                    Dataframe containing all molecules in Seager et al.'s data set.
+        df: pandas dataframe
+            Empty dataframe with columns according to data to be added.
+    '''
+    files_list = glob.glob(comp_loc+'4_BigData/?_Atoms')+glob.glob(comp_loc+'4_BigData/??_Atoms')
+    files_list.remove(comp_loc+'4_BigData/21_Atoms')# Not Complete yet
+    print(files_list)
+    for file in files_list:
+        loc_num_atoms = file.split('/')[-1]+'/'
+        int_parse_vib_data(location,loc_num_atoms,biosig_data,df)
+    return
+## end of two functions ##
