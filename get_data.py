@@ -6,27 +6,17 @@ for the BigData1 paper.
 '''
 
 # import python packages for use in this program
-from rdkit.Chem import rdMolDescriptors
-from rdkit.Chem import AllChem
-
-from mendeleev import element
-
-#import chemcoord as cc
-from scipy import stats
-from rdkit import Chem
-import seaborn as sns
+import os
+import glob
+import re
 import pandas as pd
 import numpy as np
-import shutil
-import glob
-import csv
-import ast
-import os
-import re
-from os.path import exists
+
+
 
 #global variables
 CONF, conf = 'Conformers', 'conformers'
+comp_loc = '/Users/mpettyjo/Documents/Research/'
 
 
 def get_harm_info(file):
@@ -182,7 +172,7 @@ def get_boltzmannweights_at_T(final_df):
     return
 
 ## These two functions work together ##
-def int_get_gibbs_energy(location,loc_num_atoms,mol_id,CONF,conf,energy_df):
+def int_get_gibbs_energy(location, loc_num_atoms, mol_id, CONF, conf, energy_df):
     ''' Extract the Gibbs free energies from the CENSO output files for 
         one molecule and then put then in a dataframe.
 
@@ -224,7 +214,7 @@ def int_get_gibbs_energy(location,loc_num_atoms,mol_id,CONF,conf,energy_df):
                     energy_df.loc[len(energy_df)] = [row[0],float(row[5])*627.509*4.184,float(row[5])] # 4.184 is the conversion factor to kJ/mol
     return energy_df
 
-def get_censo_gibbs_energy(location,loc_num_atoms,mol_id):
+def get_censo_gibbs_energy(location, loc_num_atoms, mol_id):
     ''' Create dataframe with Gibbs free energy and Boltzmann weights
         for a given molecule.
     
@@ -246,8 +236,6 @@ def get_censo_gibbs_energy(location,loc_num_atoms,mol_id):
     -------
     '''
     energy_df = pd.DataFrame(columns = ['CONF#','G','RawG'])
-    CONF = 'Conformers'
-    conf = 'conformers'
     
     final_df = int_get_gibbs_energy(location,loc_num_atoms,mol_id,CONF,conf,energy_df)
         
@@ -335,7 +323,7 @@ def get_rotational_constants(file):
         
     return [float(rot_info[0])/29979.2458,float(rot_info[1])/29979.2458,float(rot_info[2])/29979.2458]
 
-def grab_constant(inp,quartic_constants):
+def grab_constant(inp, quartic_constants):
     '''Get quartic rotational constant from list and add
         them to the input list.
     
@@ -404,7 +392,7 @@ def have_hyperfine(file):
 
 ## end of rotational data functions ##
 
-def get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf):
+def get_rotamer_degeneracy(location, loc_num_atoms, mol_id, conf):
     ''' Get rotamer degeneracy from CREST output file for molecule.
 
     Parameters
@@ -449,7 +437,7 @@ def get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf):
 # -------------------------------------------
 
 ## these two functions work together ##
-def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
+def int_parse_vib_data(location, loc_num_atoms, biosig_data, df):
     ''' Get all data from Gaussian output files for a given number of atoms
         folder and store in a dataframe. 
 
@@ -555,7 +543,11 @@ def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
                 rota_degen = get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf)
 
                 # Make each row of data
-                row_info = list([mol_id,smiles_code,mol_tot_atoms,conf,rota_degen,conf_energy,conf_bw_10K,conf_bw_50K,conf_bw_100K,conf_bw_29815K,conf_raw_freqs,conf_scaled_freqs,conf_ints,dipole_info[0],dipole_info[1],dipole_info[2],dipole_info[3],dipole_info[4],rot_info[0],rot_info[1],rot_info[2]])
+                row_info = list([mol_id, smiles_code, mol_tot_atoms, conf, 
+                                 rota_degen, conf_energy, conf_bw_10K, conf_bw_50K, 
+                                 conf_bw_100K, conf_bw_29815K, conf_raw_freqs, conf_scaled_freqs, 
+                                 conf_ints, dipole_info[0], dipole_info[1], dipole_info[2], dipole_info[3],
+                                 dipole_info[4], rot_info[0], rot_info[1], rot_info[2]])
                 df.loc[len(df)] = row_info
 
             # If imaginary frequency found, prints the name of the molecule.
@@ -564,7 +556,7 @@ def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
                 print(file.split('/')[-1]+' has imaginary frequencies.')
     return df
     
-def parse_vib_data(location,biosig_data,df):
+def parse_vib_data(location, biosig_data, df):
     ''' Gets data from Gaussian output files for all atoms folders using
         in_parse_vib_data and populates pandas dataframe `df`.
 
