@@ -450,6 +450,15 @@ def get_rotamer_degeneracy(location,loc_num_atoms,mol_id,conf):
 
 ## these two functions work together ##
 def int_parse_vib_data(location,loc_num_atoms,biosig_data,df):
+    '''
+    Parameters
+    ----------
+    location: string
+                    Directory pathway to the project folder, i.e., "4_BigData"
+    loc_num_atoms: string
+                    Directory name with form "{NUM}_Atoms/", where NUM is the
+                    number of atoms.
+    '''
     file_conf_list=unique_conf_list(location,loc_num_atoms)
 
     # Opens each individual output file as reference for the SMILES codes.
